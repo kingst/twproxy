@@ -157,7 +157,7 @@ void Cache::getHTTPResponse(string host, string request, string /*url*/, int /*s
     } catch(char *e) {
         cout << e << endl;
     } catch(...) {
-        cout << "unknown exception type, pid = " << getpid() << endl;
+        cout << "could not connect to " << hostStr << ":" << port << endl;
     }
 
     if(replySock == NULL) {

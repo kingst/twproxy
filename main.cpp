@@ -43,6 +43,7 @@
 */
 
 #include <iostream>
+#include <queue>
 
 #include <assert.h>
 #include <pthread.h>
@@ -57,12 +58,13 @@ using namespace std;
 int serverPorts[] = {8000};
 #define NUM_SERVERS (sizeof(serverPorts) / sizeof(serverPorts[0]))
 
-static pthread_mutex_t logMutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static unsigned long numThreads = 0;
 
 struct client_struct {
     MySocket *sock;
     int serverPort;
+    queue<MySocket *> *killQueue;
 };
 
 void run_client(MySocket *sock, int serverPort)
@@ -76,7 +78,6 @@ void run_client(MySocket *sock, int serverPort)
     }    
 
     sock->close();
-    delete sock;
     delete request;
 }
 
@@ -84,29 +85,36 @@ void *client_thread(void *arg) {
     struct client_struct *cs = (struct client_struct *) arg;
     MySocket *sock = cs->sock;
     int serverPort = cs->serverPort;
+    queue<MySocket *> *killQueue = cs->killQueue;
 
     delete cs;
 
-    pthread_mutex_lock(&logMutex);
+    pthread_mutex_lock(&mutex);
     numThreads++;
     //cout << "numThread = " << numThreads << endl;
-    pthread_mutex_unlock(&logMutex);
+    pthread_mutex_unlock(&mutex);
 
     run_client(sock, serverPort);
 
-    pthread_mutex_lock(&logMutex);
+    pthread_mutex_lock(&mutex);
     numThreads--;
     //cout << "numThread = " << numThreads << endl;
-    pthread_mutex_unlock(&logMutex);    
+
+    // This is a hack because linux is having trouble freeing memory
+    // in a different thread, so instead we will let the server thread
+    // free this memory 
+    killQueue->push(sock);
+    pthread_mutex_unlock(&mutex);    
 
     return NULL;
 }
 
-void start_client(MySocket *sock, int serverPort)
+void start_client(MySocket *sock, int serverPort, queue<MySocket *> *killQueue)
 {
     struct client_struct *cs = new struct client_struct;
     cs->sock = sock;
     cs->serverPort = serverPort;
+    cs->killQueue = killQueue;
 
     pthread_t tid;
     int ret = pthread_create(&tid, NULL, client_thread, cs);
@@ -121,10 +129,17 @@ void start_server(int port)
     
     MyServerSocket *server = new MyServerSocket(port);
     MySocket *client;
+    queue<MySocket *> killQueue;
 
     while(true) {
         client = server->accept();
-        start_client(client, port);
+        pthread_mutex_lock(&mutex);
+        while(killQueue.size() > 0) {
+            delete killQueue.front();
+            killQueue.pop();
+        }
+        pthread_mutex_unlock(&mutex);
+        start_client(client, port, &killQueue);
     }
 }
 
