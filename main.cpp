@@ -57,10 +57,28 @@ using namespace std;
 int serverPorts[] = {8000};
 #define NUM_SERVERS (sizeof(serverPorts) / sizeof(serverPorts[0]))
 
+static pthread_mutex_t logMutex = PTHREAD_MUTEX_INITIALIZER;
+static unsigned long numThreads = 0;
+
 struct client_struct {
     MySocket *sock;
     int serverPort;
 };
+
+void run_client(MySocket *sock, int serverPort)
+{
+    HTTPRequest *request = new HTTPRequest(sock, serverPort);
+    if(!request->readRequest()) {
+        cout << "did not read request" << endl;
+    } else {    
+        cache()->getHTTPResponse(request->getHost(), request->getRequest(),
+                                 request->getUrl(), serverPort, sock, request->isConnect());
+    }    
+
+    sock->close();
+    delete sock;
+    delete request;
+}
 
 void *client_thread(void *arg) {
     struct client_struct *cs = (struct client_struct *) arg;
@@ -69,18 +87,17 @@ void *client_thread(void *arg) {
 
     delete cs;
 
-    HTTPRequest *request = new HTTPRequest(sock, serverPort);
-    if(!request->readRequest()) {
-        cout << "did not read request" << endl;
-        return NULL;
-    }
+    pthread_mutex_lock(&logMutex);
+    numThreads++;
+    //cout << "numThread = " << numThreads << endl;
+    pthread_mutex_unlock(&logMutex);
 
-    cache()->getHTTPResponse(request->getHost(), request->getRequest(),
-                             request->getUrl(), serverPort, sock);
-    
-    sock->close();
-    delete sock;
-    delete request;
+    run_client(sock, serverPort);
+
+    pthread_mutex_lock(&logMutex);
+    numThreads--;
+    //cout << "numThread = " << numThreads << endl;
+    pthread_mutex_unlock(&logMutex);    
 
     return NULL;
 }

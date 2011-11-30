@@ -17,6 +17,7 @@ class HTTPRequest {
     std::string getHost();
     std::string getRequest();
     std::string getUrl();
+    bool isConnect();
 
     void printDebugInfo();
     

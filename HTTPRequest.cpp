@@ -123,13 +123,6 @@ void HTTPRequest::onRead(const unsigned char *buffer, unsigned int len)
             }
         }
     }
-    if(m_http->isDone()) {                       
-        if(m_http->isConnect()) {
-            assert(false);
-            assert(m_http->getBody().size() == 0);
-            //appendWriteData(CONNECT_REPLY, strlen(CONNECT_REPLY));
-        }
-    }
 }
 
 string HTTPRequest::getHost()
@@ -143,4 +136,9 @@ string HTTPRequest::getRequest()
 string HTTPRequest::getUrl()
 {
     return m_http->getUrl();
+}
+
+bool HTTPRequest::isConnect()
+{
+    return m_http->isConnect();
 }
