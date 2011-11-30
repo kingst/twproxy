@@ -75,6 +75,7 @@ MySocket::MySocket(const char *inetAddr, int port)
     server.sin_addr = ((struct sockaddr_in *) (res->ai_addr))->sin_addr;
     server.sin_port = htons((short) port);
     server.sin_family = AF_INET;
+    freeaddrinfo(res);
     
     // conenct to the server
     if( connect(sockFd, (struct sockaddr *) &server,

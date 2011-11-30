@@ -55,37 +55,20 @@ static Cache globalCache;
 
 static string reply404 = "HTTP/1.1 404 Not Found\r\nServer: twproxy\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
 
-Cache *cache() {
+static string CONNECT_REPLY = "HTTP/1.1 200 Connection Established\r\n\r\n";
+
+Cache *cache()
+{
     return &globalCache;
 }
 
-Cache::Cache() {
+Cache::Cache()
+{
 
 }
 
-void Cache::getHTTPResponse(string host, string request, string /*url*/, int /*serverPort*/, 
-                             MySocket *browserSock) {
-    assert(host.find(':') != string::npos);
-    assert(host.find(':') < (host.length()-1));
-    string portStr = host.substr(host.find(':')+1);
-    string hostStr = host.substr(0, host.find(':'));
-    int port;
-    int ret = sscanf(portStr.c_str(), "%d", &port);
-    assert((ret == 1) && (port > 0));
-    MySocket *replySock = NULL;
-    try {
-        replySock = new MySocket(hostStr.c_str(), port);
-    } catch(char *e) {
-        cout << e << endl;
-    } catch(...) {
-        cout << "unknown exception type, pid = " << getpid() << endl;
-    }
-
-    if(replySock == NULL) {
-        browserSock->write_bytes(reply404);        
-        return;
-    }
-
+void Cache::handleResponse(MySocket *browserSock, MySocket *replySock, string request)
+{
     if(!replySock->write_bytes(request)) {
         // XXX FIXME we should do something other than 404 here
         browserSock->write_bytes(reply404);
@@ -95,8 +78,94 @@ void Cache::getHTTPResponse(string host, string request, string /*url*/, int /*s
 
     unsigned char buf[1024];
     int num_bytes;
-    while((num_bytes = replySock->read(buf, sizeof(buf))) > 0) {
-        browserSock->write_bytes(buf, num_bytes);
+    bool ret;
+    while((num_bytes = replySock->read(buf, sizeof(buf))) > 0) {        
+        ret = browserSock->write_bytes(buf, num_bytes);
+        if(!ret) {
+            break;
+        }
+    }
+}
+
+bool Cache::copyNetBytes(MySocket *readSock, MySocket *writeSock)
+{
+    unsigned char buf[1024];
+    int ret;
+
+    ret = readSock->read(buf, sizeof(buf));
+    if(ret <= 0)
+        return false;
+
+    return writeSock->write_bytes(buf, ret);
+}
+
+void Cache::handleTunnel(MySocket *browserSock, MySocket *replySock)
+{
+    if(!browserSock->write_bytes(CONNECT_REPLY))
+        return;
+
+    int bFd = browserSock->getFd();
+    int rFd = replySock->getFd();    
+
+    int ret;
+    fd_set readSet;
+
+    int maxFd = (bFd > rFd) ? bFd : rFd;
+    while(true) {
+        FD_ZERO(&readSet);
+
+        FD_SET(rFd, &readSet);
+        FD_SET(bFd, &readSet);
+
+        ret = select(maxFd+1, &readSet, NULL, NULL, NULL);
+
+        if(ret <= 0)
+            break;
+
+        if(FD_ISSET(rFd, &readSet)) {
+            if(!copyNetBytes(replySock, browserSock)) {
+                break;
+            }
+        }
+
+        if(FD_ISSET(bFd, &readSet)) {
+            if(!copyNetBytes(browserSock, replySock)) {
+                break;
+            }
+        }
+    }
+}
+
+void Cache::getHTTPResponse(string host, string request, string /*url*/, int /*serverPort*/, 
+                            MySocket *browserSock, bool isTunnel)
+{
+    assert(host.find(':') != string::npos);
+    assert(host.find(':') < (host.length()-1));
+    string portStr = host.substr(host.find(':')+1);
+    string hostStr = host.substr(0, host.find(':'));
+    int port;
+    int ret = sscanf(portStr.c_str(), "%d", &port);
+    assert((ret == 1) && (port > 0));
+    MySocket *replySock = NULL;
+    try {
+        //cout << "making connection to " << hostStr << ":" << port << endl;
+        replySock = new MySocket(hostStr.c_str(), port);
+    } catch(char *e) {
+        cout << e << endl;
+    } catch(...) {
+        cout << "unknown exception type, pid = " << getpid() << endl;
+    }
+
+    if(replySock == NULL) {
+        cout << "returning 404" << endl;
+        browserSock->write_bytes(reply404);
+        return;
+    }
+
+    if(isTunnel) {
+        handleTunnel(browserSock, replySock);
+    } else {
+        handleResponse(browserSock, replySock, request);
     }
 
     delete replySock;
