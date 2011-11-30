@@ -48,6 +48,11 @@
 #include <iostream>
 
 #include <assert.h>
+#include <sys/select.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 using namespace std;
 
@@ -72,10 +77,6 @@ void Cache::handleResponse(MySocket *browserSock, MySocket *replySock, string re
     if(!replySock->write_bytes(request)) {
         // XXX FIXME we should do something other than 404 here
         browserSock->write_bytes(reply404);
-<<<<<<< HEAD
-=======
-        delete replySock;
->>>>>>> d4730e73d1032c1b7cc4675695972b3784d5ed9f
         return;
     }
 
@@ -124,7 +125,6 @@ void Cache::handleTunnel(MySocket *browserSock, MySocket *replySock)
 
         if(ret <= 0)
             break;
-<<<<<<< HEAD
 
         if(FD_ISSET(rFd, &readSet)) {
             if(!copyNetBytes(replySock, browserSock)) {
@@ -132,15 +132,6 @@ void Cache::handleTunnel(MySocket *browserSock, MySocket *replySock)
             }
         }
 
-=======
-
-        if(FD_ISSET(rFd, &readSet)) {
-            if(!copyNetBytes(replySock, browserSock)) {
-                break;
-            }
-        }
-
->>>>>>> d4730e73d1032c1b7cc4675695972b3784d5ed9f
         if(FD_ISSET(bFd, &readSet)) {
             if(!copyNetBytes(browserSock, replySock)) {
                 break;
