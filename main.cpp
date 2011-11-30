@@ -111,6 +111,8 @@ void start_client(MySocket *sock, int serverPort)
     pthread_t tid;
     int ret = pthread_create(&tid, NULL, client_thread, cs);
     assert(ret == 0);
+    ret = pthread_detach(tid);
+    assert(ret == 0);
 }
 
 void start_server(int port)
