@@ -1,0 +1,3 @@
+This is a very basic HTTP proxy.  Currently it will create a new
+thread for each new client connection and use blocking I/O calls to
+get the request from the browser and then get a reply from the server.
