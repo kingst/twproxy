@@ -66,7 +66,6 @@ HTTPRequest::HTTPRequest(MySocket *sock, int serverPort)
 
 HTTPRequest::~HTTPRequest()
 {
-    m_sock->close();
     delete m_http;
 }
 

@@ -60,8 +60,6 @@ static Cache globalCache;
 
 static string reply404 = "HTTP/1.1 404 Not Found\r\nServer: twproxy\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
 
-static string CONNECT_REPLY = "HTTP/1.1 200 Connection Established\r\n\r\n";
-
 Cache *cache()
 {
     return &globalCache;
@@ -91,6 +89,7 @@ void Cache::handleResponse(MySocket *browserSock, MySocket *replySock, string re
     }
 }
 
+/*
 bool Cache::copyNetBytes(MySocket *readSock, MySocket *writeSock)
 {
     unsigned char buf[1024];
@@ -115,6 +114,7 @@ void Cache::handleTunnel(MySocket *browserSock, MySocket *replySock)
     fd_set readSet;
 
     int maxFd = (bFd > rFd) ? bFd : rFd;
+
     while(true) {
         FD_ZERO(&readSet);
 
@@ -139,9 +139,10 @@ void Cache::handleTunnel(MySocket *browserSock, MySocket *replySock)
         }
     }
 }
+*/
 
-void Cache::getHTTPResponse(string host, string request, string /*url*/, int /*serverPort*/, 
-                            MySocket *browserSock, bool isTunnel)
+void Cache::getHTTPResponse(string host, string request, string url, int /*serverPort*/, 
+                            MySocket *browserSock, bool isSSL)
 {
     assert(host.find(':') != string::npos);
     assert(host.find(':') < (host.length()-1));
@@ -154,6 +155,9 @@ void Cache::getHTTPResponse(string host, string request, string /*url*/, int /*s
     try {
         //cout << "making connection to " << hostStr << ":" << port << endl;
         replySock = new MySocket(hostStr.c_str(), port);
+        if(isSSL) {
+            replySock->enableSSLClient();
+        }
     } catch(char *e) {
         cout << e << endl;
     } catch(...) {
@@ -166,11 +170,7 @@ void Cache::getHTTPResponse(string host, string request, string /*url*/, int /*s
         return;
     }
 
-    if(isTunnel) {
-        handleTunnel(browserSock, replySock);
-    } else {
-        handleResponse(browserSock, replySock, request);
-    }
+    handleResponse(browserSock, replySock, request);
 
     delete replySock;
 }

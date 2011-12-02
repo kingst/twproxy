@@ -9,6 +9,7 @@
 #include "MySocketException.h"
 
 #include <string>
+#include <openssl/ssl.h>
 
 class MySocket {
  public:
@@ -62,6 +63,8 @@ class MySocket {
 
   bool write_bytes(std::string buffer);
   bool write_bytes(const void *buffer, int len);
+  void enableSSLServer(void);
+  void enableSSLClient(void);
 
   /*
    * a helper function so select can be used
@@ -73,6 +76,9 @@ class MySocket {
  protected:
   int sockFd;
   void brokenPipe(int sigNo);
+  bool isSSL;
+  SSL_CTX *ctx;
+  SSL *ssl;
 };
 
 #endif

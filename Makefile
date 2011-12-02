@@ -1,8 +1,9 @@
-all: twproxy
+EXE = twproxy
+all: $(EXE)
 
 CC = g++
 CFLAGS = -g -W -Wall
-LDFLAGS = -lpthread
+LDFLAGS = -lpthread -lssl
 
 OBJS = main.o MyServerSocket.o MySocket.o HTTPRequest.o http_parser.o HTTP.o Cache.o
 
@@ -10,6 +11,9 @@ OBJS = main.o MyServerSocket.o MySocket.o HTTPRequest.o http_parser.o HTTP.o Cac
 
 twproxy: $(OBJS)
 	$(CC) -o $@ $(CFLAGS) $(LDFLAGS) $(OBJS)
+
+serv: serv.o
+	$(CC) -o $@ $(CFLAGS) $(LDFLAGS) serv.o
 
 %.d: %.c
 	@set -e; $(CC) -MM $(CFLAGS) $< \
@@ -28,4 +32,4 @@ twproxy: $(OBJS)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f twproxy *.o *~ core.* *.d
+	rm -f $(EXE) *.o *~ core.* *.d

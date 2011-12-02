@@ -48,6 +48,8 @@
 #include <assert.h>
 #include <pthread.h>
 #include <signal.h>
+#include <openssl/err.h>
+#include <openssl/ssl.h>
 
 #include "MyServerSocket.h"
 #include "HTTPRequest.h"
@@ -55,8 +57,10 @@
 
 using namespace std;
 
-int serverPorts[] = {8000};
+int serverPorts[] = {8080};
 #define NUM_SERVERS (sizeof(serverPorts) / sizeof(serverPorts[0]))
+
+static string CONNECT_REPLY = "HTTP/1.1 200 Connection Established\r\n\r\n";
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static unsigned long numThreads = 0;
@@ -70,11 +74,35 @@ struct client_struct {
 void run_client(MySocket *sock, int serverPort)
 {
     HTTPRequest *request = new HTTPRequest(sock, serverPort);
+
     if(!request->readRequest()) {
         cout << "did not read request" << endl;
     } else {    
-        cache()->getHTTPResponse(request->getHost(), request->getRequest(),
-                                 request->getUrl(), serverPort, sock, request->isConnect());
+        bool error = false;
+        bool isSSL = false;
+
+        string host = request->getHost();
+        string url = request->getUrl();
+
+        if(request->isConnect()) {
+            cerr << "connect request for " << host << " " << url << endl;
+            if(!sock->write_bytes(CONNECT_REPLY)) {
+                error = true;
+            } else {
+                delete request;
+                sock->enableSSLServer();
+                isSSL = true;
+                request = new HTTPRequest(sock, serverPort);
+                if(!request->readRequest()) {
+                    error = true;
+                }
+            }
+        }
+
+        if(!error) {
+            string req = request->getRequest();
+            cache()->getHTTPResponse(host, req, url, serverPort, sock, isSSL);
+        }
     }    
 
     sock->close();
@@ -146,7 +174,13 @@ void start_server(int port)
 
 int main(int /*argc*/, char */*argv*/[])
 {
+    // get socket write errors from write call
     signal(SIGPIPE, SIG_IGN);
+
+    // initialize ssl library
+    SSL_load_error_strings();
+    SSL_library_init();
+
     for(unsigned int idx = 0; idx < NUM_SERVERS; idx++) {
         start_server(serverPorts[idx]);
     }

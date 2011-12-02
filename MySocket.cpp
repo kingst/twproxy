@@ -50,14 +50,30 @@
 #include <netdb.h>
 #include <netinet/in.h>
 #include <string>
+#include <assert.h>
+
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 using namespace std;
+
+#define CHK_SSL(err) if ((err)==-1) { ERR_print_errors_fp(stderr); exit(2); }
+#define CHK_NULL(x) if ((x)==NULL) exit (1)
+
+#define HOME "./"
+#define CERTF  HOME "cacert.pem"
+#define KEYF  HOME  "privkey.pem"
+
 
 MySocket::MySocket(const char *inetAddr, int port)
 {
     struct sockaddr_in server;
     struct addrinfo hints;
     struct addrinfo *res;
+
+    isSSL = false;
+    ctx = NULL;
+    ssl = NULL;
 
     // set up the new socket (TCP/IP)
     sockFd = socket(AF_INET,SOCK_STREAM,0);
@@ -87,11 +103,17 @@ MySocket::MySocket(const char *inetAddr, int port)
 MySocket::MySocket(void)
 {
     sockFd = -1;
+    isSSL = false;
+    ctx = NULL;
+    ssl = NULL;
 }
 
 MySocket::MySocket(int socketFileDesc)
 {
     sockFd = socketFileDesc;
+    isSSL = false;
+    ctx = NULL;
+    ssl = NULL;
 }
 
 MySocket::~MySocket(void)
@@ -99,12 +121,83 @@ MySocket::~MySocket(void)
     close();
 }
 
+void MySocket::enableSSLServer(void)
+{
+    if(sockFd < 0) return;
+
+    ctx = SSL_CTX_new (SSLv23_server_method());
+    if (!ctx) {
+        ERR_print_errors_fp(stderr);
+        exit(2);
+    }
+    
+    if (SSL_CTX_use_certificate_chain_file(ctx, CERTF) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(3);
+    }
+    if (SSL_CTX_use_PrivateKey_file(ctx, KEYF, SSL_FILETYPE_PEM) <= 0) {
+        ERR_print_errors_fp(stderr);
+        exit(4);
+    }
+    
+    if (!SSL_CTX_check_private_key(ctx)) {
+        fprintf(stderr,"Private key does not match the certificate public key\n");
+        exit(5);
+    }   
+
+    ssl = SSL_new (ctx);                           CHK_NULL(ssl);
+    SSL_set_fd (ssl, sockFd);
+    int err = SSL_accept (ssl);                        CHK_SSL(err);
+  
+    printf ("SSL connection using %s\n", SSL_get_cipher (ssl));
+    isSSL = true;
+}
+
+void MySocket::enableSSLClient(void)
+{
+    if(sockFd < 0) return;
+
+    ctx = SSL_CTX_new (SSLv23_client_method());
+    if (!ctx) {
+        ERR_print_errors_fp(stderr);
+        exit(2);
+    }
+
+    ssl = SSL_new (ctx);                         CHK_NULL(ssl);
+    SSL_set_fd (ssl, sockFd);
+    int err = SSL_connect (ssl);                     CHK_SSL(err);
+    
+    printf ("SSL connection using %s\n", SSL_get_cipher (ssl));
+
+    X509 *server_cert = SSL_get_peer_certificate (ssl);       CHK_NULL(server_cert);
+    printf ("Server certificate:\n");
+
+    char *str = X509_NAME_oneline (X509_get_subject_name (server_cert),0,0);
+    CHK_NULL(str);
+    printf ("\t subject: %s\n", str);
+    OPENSSL_free (str);
+
+    str = X509_NAME_oneline (X509_get_issuer_name  (server_cert),0,0);
+    CHK_NULL(str);
+    printf ("\t issuer: %s\n", str);
+    OPENSSL_free (str);
+
+    X509_free (server_cert);
+    isSSL = true;
+}
+
 int MySocket::write(const void *buffer, int len)
 {
     if(sockFd<0) return ENOT_CONNECTED;
     
-    int ret = ::write(sockFd, buffer, len);
+    int ret;
     
+    if(isSSL) {
+        ret = SSL_write(ssl, buffer, len);
+    } else {
+        ret = ::write(sockFd, buffer, len);
+    }    
+
     if(ret != len) return ESOCKET_ERROR;
     
     return ret;
@@ -136,7 +229,13 @@ int MySocket::read(void *buffer, int len)
 {
     if(sockFd<0) return ENOT_CONNECTED;
     
-    int ret = ::read(sockFd, buffer, len);
+    int ret;
+    
+    if(isSSL) {
+        ret = SSL_read(ssl, buffer, len);
+    } else {
+        ret = ::read(sockFd, buffer, len);
+    }
     
     if(ret == 0) return ECONN_CLOSED;
     if(ret < 0) return ESOCKET_ERROR;
@@ -151,4 +250,15 @@ void MySocket::close(void)
     ::close(sockFd);
 
     sockFd = -1;
+
+    isSSL = false;
+
+    if(ssl != NULL)
+        SSL_free(ssl);
+
+    if(ctx != NULL)
+        SSL_CTX_free(ctx);
+
+    ssl = NULL;
+    ctx = NULL;
 }
