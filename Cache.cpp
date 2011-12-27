@@ -11,7 +11,7 @@
 **    Science The University of Illinois at Urbana-Champaign 
 **    http://www.cs.uiuc.edu/homes/kingst/Research.html 
 **
-** Copyright (C) Sam King
+** Copyright (C) Sam King and Hui Xue
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a 
 ** copy of this software and associated documentation files (the 
@@ -54,125 +54,147 @@
 #include <stdio.h>
 #include <stdarg.h>
 
+#include "CacheEntry.h"
+#include "dbg.h"
+
 using namespace std;
 
 static Cache globalCache;
+int Cache::num_browsers = 0;
 
 static string reply404 = "HTTP/1.1 404 Not Found\r\nServer: twproxy\r\nConnection: close\r\nContent-Length: 0\r\n\r\n";
 
+
+extern int serverPorts[];
+
 Cache *cache()
 {
-    return &globalCache;
+        return &globalCache;    
 }
 
-Cache::Cache()
-{
 
+MySocket *Cache::getReplySocket(string host, bool isSSL)
+{
+        assert(host.find(':') != string::npos);
+        assert(host.find(':') < (host.length()-1));
+        string portStr = host.substr(host.find(':')+1);
+        string hostStr = host.substr(0, host.find(':'));
+        int port;
+        int ret = sscanf(portStr.c_str(), "%d", &port);
+        assert((ret == 1) && (port > 0));
+        MySocket *replySock = NULL;
+        try {
+                //cout << "making connection to " << hostStr << ":" << port << endl;
+                replySock = new MySocket(hostStr.c_str(), port);
+                if(isSSL) {
+                        replySock->enableSSLClient();
+                }
+        } catch(char *e) {
+                cout << e << endl;
+        } catch(...) {
+                cout << "could not connect to " << hostStr << ":" << port << endl;
+        }
+        return replySock;
+}
+
+//XXX: should check url, method, cookie, possible even port
+CacheEntry *Cache::find(string url, string /*request*/)
+{
+        assert(false);
+        return NULL;
+}
+
+void Cache::addToStore(string url, CacheEntry *ent)
+{
+        assert(false);
+}
+
+int Cache::votingFetchInsertWriteback(string url, string request, int browserId,
+                                      MySocket *browserSock, string host, bool isSSL,
+                                      MySocket *replySock)
+{
+        assert(false);
+        return 0;
+}
+
+int Cache::sendBrowser(MySocket *browserSock, CacheEntry *ent, int browserId)
+{
+        assert(false);
+        return 0;
+}
+
+void Cache::getHTTPResponseVote(string host, string request, string url, int serverPort, 
+                                MySocket *browserSock, bool isSSL, MySocket *replySock)
+{
+        assert(false);
+        int browserId = -1;
+        pthread_mutex_lock(&cache_mutex);
+        browserId = serverPort - serverPorts[0];
+        cache_dbg("cache lock browser %d  %s\n", browserId, url.c_str());
+        votingFetchInsertWriteback(url, request, browserId, browserSock, host, isSSL,
+                                   replySock);
+        cache_dbg("cache UNlock browser %d  %s\n", browserId, url.c_str());
+        pthread_mutex_unlock(&cache_mutex);
+        cache_dbg("cache BROADCAST browser %d  %s\n", browserId, url.c_str());
+        pthread_cond_broadcast(&cache_cond);
+}
+
+static void dbg_fetch(int ret) {
+        assert(false);
+}
+
+
+int Cache::fetch(CacheEntry *ent, string host, bool isSSL, int browserId, MySocket *replySock)
+{
+        assert(false);
+        return 0;
 }
 
 void Cache::handleResponse(MySocket *browserSock, MySocket *replySock, string request)
 {
-    if(!replySock->write_bytes(request)) {
-        // XXX FIXME we should do something other than 404 here
-        browserSock->write_bytes(reply404);
-        return;
-    }
-
-    unsigned char buf[1024];
-    int num_bytes;
-    bool ret;
-    while((num_bytes = replySock->read(buf, sizeof(buf))) > 0) {        
-        ret = browserSock->write_bytes(buf, num_bytes);
-        if(!ret) {
-            break;
+        if(!replySock->write_bytes(request)) {
+                // XXX FIXME we should do something other than 404 here
+                browserSock->write_bytes(reply404);
+                return;
         }
-    }
+        unsigned char buf[1024];
+        int num_bytes;
+        bool ret;
+        while((num_bytes = replySock->read(buf, sizeof(buf))) > 0) {        
+                ret = browserSock->write_bytes(buf, num_bytes);
+                if(!ret) {
+                        break;
+                }
+        }
 }
 
-/*
-bool Cache::copyNetBytes(MySocket *readSock, MySocket *writeSock)
+void Cache::getHTTPResponseNoVote(string host, string request, string url, int serverPort, 
+                                  MySocket *browserSock, bool isSSL, MySocket *replySock)
 {
-    unsigned char buf[1024];
-    int ret;
+        if(replySock == NULL) {
+                cout << "returning 404" << endl;
+                browserSock->write_bytes(reply404);
+                return;
+        }
+        handleResponse(browserSock, replySock, request);
 
-    ret = readSock->read(buf, sizeof(buf));
-    if(ret <= 0)
-        return false;
-
-    return writeSock->write_bytes(buf, ret);
+        delete replySock;
 }
 
-void Cache::handleTunnel(MySocket *browserSock, MySocket *replySock)
+void Cache::setNumBrowsers(const int num) 
 {
-    if(!browserSock->write_bytes(CONNECT_REPLY))
-        return;
-
-    int bFd = browserSock->getFd();
-    int rFd = replySock->getFd();    
-
-    int ret;
-    fd_set readSet;
-
-    int maxFd = (bFd > rFd) ? bFd : rFd;
-
-    while(true) {
-        FD_ZERO(&readSet);
-
-        FD_SET(rFd, &readSet);
-        FD_SET(bFd, &readSet);
-
-        ret = select(maxFd+1, &readSet, NULL, NULL, NULL);
-
-        if(ret <= 0)
-            break;
-
-        if(FD_ISSET(rFd, &readSet)) {
-            if(!copyNetBytes(replySock, browserSock)) {
-                break;
-            }
-        }
-
-        if(FD_ISSET(bFd, &readSet)) {
-            if(!copyNetBytes(browserSock, replySock)) {
-                break;
-            }
-        }
-    }
+        num_browsers = (int)num;
 }
-*/
 
-void Cache::getHTTPResponse(string host, string request, string url, int /*serverPort*/, 
-                            MySocket *browserSock, bool isSSL)
+Cache::Cache()
 {
-    assert(host.find(':') != string::npos);
-    assert(host.find(':') < (host.length()-1));
-    string portStr = host.substr(host.find(':')+1);
-    string hostStr = host.substr(0, host.find(':'));
-    int port;
-    int ret = sscanf(portStr.c_str(), "%d", &port);
-    assert((ret == 1) && (port > 0));
-    MySocket *replySock = NULL;
-    try {
-        //cout << "making connection to " << hostStr << ":" << port << endl;
-        replySock = new MySocket(hostStr.c_str(), port);
-        if(isSSL) {
-            replySock->enableSSLClient();
-        }
-    } catch(char *e) {
-        cout << e << endl;
-    } catch(...) {
-        cout << "could not connect to " << hostStr << ":" << port << endl;
-    }
-
-    if(replySock == NULL) {
-        cout << "returning 404" << endl;
-        browserSock->write_bytes(reply404);
-        return;
-    }
-
-    handleResponse(browserSock, replySock, request);
-
-    delete replySock;
+        pthread_mutex_init(&cache_mutex, NULL);
+        pthread_cond_init(&cache_cond, NULL);
+}
+Cache::~Cache()
+{
+        pthread_cond_destroy(&cache_cond);
+        pthread_mutex_destroy(&cache_mutex);
 }
 
 

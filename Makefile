@@ -2,10 +2,10 @@ EXE = twproxy
 all: $(EXE)
 
 CC = g++
-CFLAGS = -g -W -Wall
+CFLAGS = -g -W -Wall -Wno-unused
 LDFLAGS = -lpthread -lssl
 
-OBJS = main.o MyServerSocket.o MySocket.o HTTPRequest.o http_parser.o HTTP.o Cache.o
+OBJS = main.o MyServerSocket.o MySocket.o HTTPRequest.o http_parser.o HTTP.o Cache.o CacheEntry.o
 
 -include $(OBJS:.o=.d)
 

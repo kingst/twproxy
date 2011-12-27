@@ -54,41 +54,41 @@
 
 MyServerSocket::MyServerSocket(int port)
 {
-    struct sockaddr_in server;
-    int one = 1;
+        struct sockaddr_in server;
+        int one = 1;
   
-    // set up the server socket
-    serverFd = socket(AF_INET,SOCK_STREAM,0);
+        // set up the server socket
+        serverFd = socket(AF_INET,SOCK_STREAM,0);
     
-    server.sin_family = AF_INET;
-    server.sin_addr.s_addr = INADDR_ANY;
-    server.sin_port = htons((short) port);
+        server.sin_family = AF_INET;
+        server.sin_addr.s_addr = INADDR_ANY;
+        server.sin_port = htons((short) port);
     
-    if (setsockopt(serverFd,SOL_SOCKET,SO_REUSEADDR,&one,sizeof(int)) == -1) {
-        throw MySocketException("error with set socket opts");
-    }
+        if (setsockopt(serverFd,SOL_SOCKET,SO_REUSEADDR,&one,sizeof(int)) == -1) {
+                throw MySocketException("error with set socket opts");
+        }
     
-    if( bind(serverFd,(struct sockaddr *) &server, sizeof(server)) ==-1){
-        char str[1024];
-        sprintf(str,"could not bind to port %d",port);
-        throw MySocketException(str);
-    }	
+        if( bind(serverFd,(struct sockaddr *) &server, sizeof(server)) ==-1){
+                char str[1024];
+                sprintf(str,"could not bind to port %d",port);
+                throw MySocketException(str);
+        }	
     
-    //set up a listen queue
-    listen(serverFd, 10);
+        //set up a listen queue
+        listen(serverFd, 10);
 }
 
 MySocket *MyServerSocket::accept()
 {
-    //check that the sockFd is valid
+        //check that the sockFd is valid
     
-    struct sockaddr_in client;
-    socklen_t len = sizeof(client);
-    int clientFd = ::accept(serverFd, (struct sockaddr *) &client, &len);
+        struct sockaddr_in client;
+        socklen_t len = sizeof(client);
+        int clientFd = ::accept(serverFd, (struct sockaddr *) &client, &len);
     
-    if(clientFd<0) {
-        throw MySocketException("Accept function call failed");
-    }
+        if(clientFd<0) {
+                throw MySocketException("Accept function call failed");
+        }
     
-    return new MySocket(clientFd);
+        return new MySocket(clientFd);
 }

@@ -57,87 +57,88 @@ using namespace std;
 
 HTTPRequest::HTTPRequest(MySocket *sock, int serverPort)
 {
-    m_sock = sock;
-    m_http = new HTTP();
-    m_serverPort = serverPort;
-    m_totalBytesRead = 0;
-    m_totalBytesWritten = 0;
+        m_sock = sock;
+        m_http = new HTTP();
+        m_serverPort = serverPort;
+        m_totalBytesRead = 0;
+        m_totalBytesWritten = 0;
 }
 
 HTTPRequest::~HTTPRequest()
 {
-    delete m_http;
+        delete m_http;
 }
 
 void HTTPRequest::printDebugInfo()
 {
-    cerr << "    isDone = " << m_http->isDone() << endl;
-    cerr << "    bytesRead = " << m_totalBytesRead << endl;
-    cerr << "    bytesWritte = " << m_totalBytesWritten << endl;
-    cerr << "    url = " << m_http->getUrl() << endl;
+        cerr << "    isDone = " << m_http->isDone() << endl;
+        cerr << "    bytesRead = " << m_totalBytesRead << endl;
+        cerr << "    bytesWritte = " << m_totalBytesWritten << endl;
+        cerr << "    url = " << m_http->getUrl() << endl;
 }
 
 bool HTTPRequest::readRequest()
 {
-    assert(!m_http->isDone());
-    unsigned char buf[1024];
+        assert(!m_http->isDone());
+        unsigned char buf[1024];
 
-    int num_bytes;
+        int num_bytes;
 
-    while(!m_http->isDone()) {
-        num_bytes = m_sock->read(buf, sizeof(buf));
-        if(num_bytes > 0) {
-            onRead(buf, (unsigned int) num_bytes);
-        } else {
-            cerr << "socket error" << endl;
-            return false;
+        while(!m_http->isDone()) {
+                num_bytes = m_sock->read(buf, sizeof(buf));
+                if(num_bytes > 0) {
+                        onRead(buf, (unsigned int) num_bytes);
+                } else {
+                        cerr << "socket error" << endl;
+                        return false;
+                }
         }
-    }
 
-    return true;
+        return true;
 }
 
 void HTTPRequest::onRead(const unsigned char *buffer, unsigned int len)
 {
-    m_totalBytesRead += len;
+        m_totalBytesRead += len;
 
-    unsigned int bytesRead = 0;
-    assert(len > 0);
+        unsigned int bytesRead = 0;
+        assert(len > 0);
 
-    while(bytesRead < len) {
-        assert(!m_http->isDone());
-        int ret = m_http->addData(buffer + bytesRead, len - bytesRead);
-        assert(ret > 0);
-        bytesRead += ret;
+        while(bytesRead < len) {
+                assert(!m_http->isDone());
+                int ret = m_http->addData(buffer + bytesRead, len - bytesRead);
+                assert(ret > 0);
+                bytesRead += ret;
         
-        // This is a workaround for a parsing bug that sometimes
-        // crops up with connect commands.  The parser will think
-        // it is done before it reads the last newline of some
-        // properly formatted connect requests
-        if(m_http->isDone() && (bytesRead < len)) {
-            if(m_http->isConnect() && ((len-bytesRead) == 1) && (buffer[bytesRead] == '\n')) {
-                break;
-            } else {
-                assert(false);
-            }
+                // This is a workaround for a parsing bug that sometimes
+                // crops up with connect commands.  The parser will think
+                // it is done before it reads the last newline of some
+                // properly formatted connect requests
+                if(m_http->isDone() && (bytesRead < len)) {
+                        if(m_http->isConnect() && ((len-bytesRead) == 1) &&
+                                                   (buffer[bytesRead] == '\n')) {
+                                break;
+                        } else {
+                                assert(false);
+                        }
+                }
         }
-    }
 }
 
 string HTTPRequest::getHost()
 {
-    return m_http->getHost();
+        return m_http->getHost();
 }
 string HTTPRequest::getRequest()
 {
-    return m_http->getProxyRequest();
+        return m_http->getProxyRequest();
 }
 string HTTPRequest::getUrl()
 {
-    return m_http->getUrl();
+        return m_http->getUrl();
 }
 
 bool HTTPRequest::isConnect()
 {
-    return m_http->isConnect();
+        return m_http->isConnect();
 }
