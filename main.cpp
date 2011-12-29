@@ -43,7 +43,6 @@
 */
 
 #include <iostream>
-#include <queue>
 
 #include <assert.h>
 #include <pthread.h>
@@ -64,13 +63,9 @@ int serverPorts[] = {8808, 8809, 8810};
 
 static string CONNECT_REPLY = "HTTP/1.1 200 Connection Established\r\n\r\n";
 
-static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-static unsigned long numThreads = 0;
-
 struct client_struct {
         MySocket *sock;
         int serverPort;
-        queue<MySocket *> *killQueue;
 };
 
 struct server_struct {
@@ -80,6 +75,21 @@ struct server_struct {
 pthread_t server_threads[NUM_SERVERS];
 static int gVOTING = 0;
 
+void run_client(MySocket *sock, int serverPort)
+{
+        HTTPRequest *request = new HTTPRequest(sock, serverPort);
+        if(request->readRequest()) {
+                cache()->getHTTPResponse(request->getHost(), request->getRequest(),
+                                         request->getUrl(), serverPort, sock,
+                                         request->isConnect());
+        }
+
+        sock->close();
+        delete request;
+        delete sock;
+}
+
+/*
 void run_client(MySocket *sock, int serverPort)
 {
         HTTPRequest *request = new HTTPRequest(sock, serverPort);
@@ -128,10 +138,8 @@ void run_client(MySocket *sock, int serverPort)
                                 //cache()->getHTTPResponseVote(host, req, url, serverPort,
                                 //sock, isSSL, replySock);
                                 assert(false);
-                                /*
-                                cache()->getHTTPResponseVote(host, req, url, serverPort,
+                                //cache()->getHTTPResponseVote(host, req, url, serverPort,
                                                              sock, isSSL, replySock);
-                                */
                         }
             
                 }
@@ -140,40 +148,26 @@ void run_client(MySocket *sock, int serverPort)
         sock->close();
         delete request;
 }
+*/
 
 void *client_thread(void *arg)
 {
         struct client_struct *cs = (struct client_struct *) arg;
         MySocket *sock = cs->sock;
         int serverPort = cs->serverPort;
-        queue<MySocket *> *killQueue = cs->killQueue;
 
         delete cs;
     
-        pthread_mutex_lock(&mutex);
-        numThreads++;
-        pthread_mutex_unlock(&mutex);
-
         run_client(sock, serverPort);
-
-        pthread_mutex_lock(&mutex);
-        numThreads--;
-
-        // This is a hack because linux is having trouble freeing
-        // memory in a different thread, so instead we will let the
-        // server thread free this memory
-        killQueue->push(sock);
-        pthread_mutex_unlock(&mutex);    
 
         return NULL;
 }
 
-void start_client(MySocket *sock, int serverPort, queue<MySocket *> *killQueue)
+void start_client(MySocket *sock, int serverPort)
 {
         struct client_struct *cs = new struct client_struct;
         cs->sock = sock;
         cs->serverPort = serverPort;
-        cs->killQueue = killQueue;
 
         pthread_t tid;
         int ret = pthread_create(&tid, NULL, client_thread, cs);
@@ -191,21 +185,15 @@ void *server_thread(void *arg)
         MyServerSocket *server = new MyServerSocket(port);
         assert(server != NULL);
         MySocket *client;
-        queue<MySocket *> killQueue;
         while(true) {
                 try {
                         client = server->accept();
+                        start_client(client, port);
                 } catch(MySocketException e) {
                         cerr << e.toString() << endl;
                         exit(1);
                 }
-                pthread_mutex_lock(&mutex);
-                while(killQueue.size() > 0) {
-                        delete killQueue.front();
-                        killQueue.pop();
-                }
-                pthread_mutex_unlock(&mutex);
-                start_client(client, port, &killQueue);
+
         }    
         return NULL;
 }
@@ -253,7 +241,7 @@ int main(int argc, char *argv[])
 
         // when generating serial number for X509, need random number
         srand(time(NULL));
-        Cache::setNumBrowsers(NUM_SERVERS);
+        //Cache::setNumBrowsers(NUM_SERVERS);
     
         pthread_t tid;
         int ret;

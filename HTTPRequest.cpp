@@ -89,7 +89,8 @@ bool HTTPRequest::readRequest()
                 if(num_bytes > 0) {
                         onRead(buf, (unsigned int) num_bytes);
                 } else {
-                        cerr << "socket error" << endl;
+                        // there was a read error before the HTTP data was finished
+                        // close the connection
                         return false;
                 }
         }
