@@ -63,31 +63,10 @@ int HTTP::message_begin_cb(http_parser *parser)
         return 0;
 }
 
-int HTTP::path_cb(http_parser *parser, const char *at, size_t length)
-{
-        HTTP *http = (HTTP *) parser->data;
-        http->m_path.append(at, length);
-        return 0;
-}
-int HTTP::query_string_cb(http_parser *parser, const char *at, size_t length)
-{
-        HTTP *http = (HTTP *) parser->data;
-        http->m_query.append(at, length);
-        return 0;
-}
-
 int HTTP::url_cb(http_parser *parser, const char *at, size_t length)
 {
         HTTP *http = (HTTP *) parser->data;
         http->appendUrl(at, length);
-
-        return 0;
-}
-
-int HTTP::fragment_cb(http_parser */*parser*/, const char */*at*/, size_t /*length*/)
-{
-        cout << "fragment" << endl;
-        assert(false);
         return 0;
 }
 
@@ -116,6 +95,7 @@ int HTTP::header_value_cb(http_parser *parser, const char *at, size_t length)
         }
         assert(http->getState() == HTTP::VALUE);
         http->appendHeaderValue(at, length);
+
         return 0;
 }
 
@@ -127,6 +107,8 @@ int HTTP::headers_complete_cb(http_parser *parser)
 
         if(http->m_httpType == HTTP_RESPONSE) {
                 char buf[64];
+                http->m_replyStatus = parser->status_code;
+
                 sprintf(buf, "HTTP/%u.%u %u ", parser->http_major, parser->http_minor,
                         parser->status_code);
                 http->m_statusStr = buf;
@@ -176,6 +158,7 @@ int HTTP::message_complete_cb(http_parser *parser)
                (http->getState() == HTTP::BODY));
         http->setState(HTTP::DONE);
         http->messageComplete(parser->method);
+
         return 0;
 }
 
@@ -195,10 +178,7 @@ HTTP::HTTP(http_parser_type httpType)
         m_headerDone = false;
 
         m_settings.on_message_begin = message_begin_cb;
-        m_settings.on_path = path_cb;
-        m_settings.on_query_string = query_string_cb;
         m_settings.on_url = url_cb;
-        m_settings.on_fragment = fragment_cb;
         m_settings.on_header_field = header_field_cb;
         m_settings.on_header_value = header_value_cb;
         m_settings.on_headers_complete = headers_complete_cb;
@@ -210,6 +190,9 @@ HTTP::HTTP(http_parser_type httpType)
         m_field = NULL;
         m_value = NULL;
         m_extraParsedBytes = 0;
+
+        m_urlState = URL_SLASH0;
+        m_replyStatus = 0;
 }
 
 HTTP::~HTTP()
@@ -315,14 +298,6 @@ string HTTP::getProxyRequest(const char *userAgent)
                 if(m_query.size() > 0) {
                         urlPathQuery += "?" + m_query;
                 }
-                if(m_url.find(urlPathQuery) == string::npos) {
-                        // this is a hack to get around buggy HTML from taobao
-                        assert(m_query.size() > 0);
-                        urlPathQuery = m_path + "??" + m_query;
-                        if(m_url.find(urlPathQuery) == string::npos) {
-                                cout << "url path mismatch " << m_url << endl << urlPathQuery << endl;
-                        }
-                }
         }
 
         if(m_method == HTTP_GET) {
@@ -387,7 +362,36 @@ void HTTP::setState(HttpState newState)
 
 void HTTP::appendUrl(const char *at, size_t len)
 {
-        m_url.append(at, len);
+        for(size_t idx = 0; idx < len; idx++) {
+                if(m_urlState == URL_SLASH0) {
+                        m_url.append(at+idx, 1);
+                        if(at[idx] == '/') {
+                                m_urlState = URL_SLASH1;
+                        }
+                } else if(m_urlState == URL_SLASH1) {
+                        m_url.append(at+idx, 1);
+                        if(at[idx] == '/') {
+                                m_urlState = URL_SLASH2;
+                        }
+                } else if(m_urlState == URL_SLASH2) {
+                        if(at[idx] == '/') {
+                                m_urlState = URL_PATH;
+                                m_path.append(at+idx, 1);
+                        } else {
+                                m_url.append(at+idx, 1);
+                        }
+                } else if(m_urlState == URL_PATH) {
+                        if(at[idx] == '?') {
+                                m_urlState = URL_QUERY;
+                        } else {
+                                m_path.append(at+idx, 1);
+                        }
+                } else if(m_urlState == URL_QUERY) {
+                        m_query.append(at+idx, 1);
+                } else {
+                        assert(false);
+                }
+        }
 }
 
 void HTTP::addHeaderField()

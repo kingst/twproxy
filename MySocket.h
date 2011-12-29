@@ -72,6 +72,7 @@ class MySocket {
   int getFd(void) { return sockFd; }
 
   void close(void);
+  bool isClosed() {return sockFd < 0;}
 
  protected:
   int sockFd;

@@ -10,6 +10,7 @@
 class HTTP {
  public:
     typedef enum {INIT, HEADER, FIELD, VALUE, BODY, DONE} HttpState;
+    typedef enum {URL_SLASH0, URL_SLASH1, URL_SLASH2, URL_PATH, URL_QUERY} UrlState;
 
     HTTP(http_parser_type httpType = HTTP_REQUEST);
     ~HTTP();
@@ -23,13 +24,11 @@ class HTTP {
     std::string getUrl();
     bool isConnect() {return m_method == HTTP_CONNECT;}
     std::string getBody();
+    bool is302Reply() {return m_replyStatus == 302;}
 
  private:
     static int message_begin_cb(http_parser *parser);
-    static int path_cb(http_parser *parser, const char *at, size_t length);
-    static int query_string_cb(http_parser *parser, const char *at, size_t length);
     static int url_cb(http_parser *parser, const char *at, size_t length);
-    static int fragment_cb(http_parser *parser, const char *at, size_t length);
     static int header_field_cb(http_parser *parser, const char *at, size_t length);
     static int header_value_cb(http_parser *parser, const char *at, size_t length);
     static int headers_complete_cb(http_parser *parser);
@@ -63,6 +62,8 @@ class HTTP {
     unsigned char m_method;
     http_parser_type m_httpType;
     int m_extraParsedBytes;
+    UrlState m_urlState;
+    int m_replyStatus;
 };
 
 #endif

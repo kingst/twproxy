@@ -78,10 +78,13 @@ static int gVOTING = 0;
 void run_client(MySocket *sock, int serverPort)
 {
         HTTPRequest *request = new HTTPRequest(sock, serverPort);
-        while(request->readRequest()) {
+        while(!sock->isClosed() && request->readRequest()) {
                 cache()->getHTTPResponse(request->getHost(), request->getRequest(),
                                          request->getUrl(), serverPort, sock,
                                          request->isConnect());
+                if(request->isConnect()) {
+                        break;
+                }
                 delete request;
                 request = new HTTPRequest(sock, serverPort);
         }
@@ -203,7 +206,7 @@ void *server_thread(void *arg)
 
 pthread_t start_server(int port)
 {
-        cerr << "starting server on port " << port << endl;
+        cout << "starting server on port " << port << endl;
         server_struct *ss = new struct server_struct;
         ss->serverPort = port;
         pthread_t tid;
