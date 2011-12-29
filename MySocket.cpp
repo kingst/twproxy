@@ -51,6 +51,8 @@
 #include <netinet/in.h>
 #include <string>
 #include <assert.h>
+#include <sys/select.h>
+#include <stdarg.h>
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
@@ -225,15 +227,27 @@ bool MySocket::write_bytes(const void *buffer, int len)
 
 }
 
-int MySocket::read(void *buffer, int len)
+int MySocket::read(void *buffer, int len, int timeout_sec)
 {
         if(sockFd<0) return ENOT_CONNECTED;
     
         int ret;
     
         if(isSSL) {
+                assert(timeout_sec == 0);
                 ret = SSL_read(ssl, buffer, len);
         } else {
+                if(timeout_sec > 0) {
+                        struct timeval tv;
+                        fd_set readSet;
+
+                        tv.tv_sec = timeout_sec;
+                        tv.tv_usec = 0;
+                        FD_ZERO(&readSet); FD_SET(sockFd, &readSet);
+                        ret = select(sockFd+1, &readSet, NULL, NULL, &tv);
+
+                        if(ret == 0) return ETIMEOUT;
+                }
                 ret = ::read(sockFd, buffer, len);
         }
     

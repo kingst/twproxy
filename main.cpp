@@ -74,6 +74,7 @@ struct server_struct {
 
 pthread_t server_threads[NUM_SERVERS];
 static int gVOTING = 0;
+static int numThreads = 0;
 
 void run_client(MySocket *sock, int serverPort)
 {

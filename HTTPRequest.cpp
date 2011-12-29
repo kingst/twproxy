@@ -85,7 +85,7 @@ bool HTTPRequest::readRequest()
         int num_bytes;
 
         while(!m_http->isDone()) {
-                num_bytes = m_sock->read(buf, sizeof(buf));
+                num_bytes = m_sock->read(buf, sizeof(buf), 3);
                 if(num_bytes > 0) {
                         onRead(buf, (unsigned int) num_bytes);
                 } else {

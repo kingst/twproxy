@@ -75,7 +75,7 @@ Cache::Cache()
 
 void Cache::handleResponse(MySocket *browserSock, MySocket *replySock, string request)
 {
-        cerr << "request:" << endl << request << endl;
+        //cerr << "request:" << endl << request << endl;
         if(!replySock->write_bytes(request)) {
                 // XXX FIXME we should do something other than 404 here
                 browserSock->write_bytes(reply404);
@@ -95,7 +95,7 @@ void Cache::handleResponse(MySocket *browserSock, MySocket *replySock, string re
                         if(http->isHeaderDone()) {
                                 assert(r > 0);
                                 string str = http->getReplyHeader();
-                                cerr << "reply:" << endl << str << endl;
+                                //cerr << "reply:" << endl << str << endl;
                                 ret = browserSock->write_bytes(str.c_str(), str.size());
                                 if((r < num_bytes) && ret) {
                                         ret = browserSock->write_bytes(buf+r, num_bytes-r);

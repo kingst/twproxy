@@ -5,6 +5,7 @@
 #define EBROKEN_PIPE   -2
 #define ECONN_CLOSED   -3
 #define ESOCKET_ERROR  -4
+#define ETIMEOUT       -5
 
 #include "MySocketException.h"
 
@@ -45,8 +46,9 @@ class MySocket {
    *   ECONN_CLOSED - connection was closed
    *   EBROKEN_PIPE - broken pipe
    *   ENOT_CONNECTED - a connection was never established
+   *   ETIMEOUT - the read timed out
    */
-  int read(void *buffer, int len);
+  int read(void *buffer, int len, int timeout_sec=0);
 
   /*
    * writes to the open socket, see the write system call.
