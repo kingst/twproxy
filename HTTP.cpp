@@ -283,7 +283,7 @@ string HTTP::getReplyHeader()
                 string value = *(m_headers[idx].second);
 
                 if(field == "Connection") {
-                        value = "close";
+                        value = "Keep-Alive";
                         foundConn = true;
                 }
 
@@ -291,7 +291,7 @@ string HTTP::getReplyHeader()
         }
 
         if(!foundConn) {
-                reply += "Connection: close\r\n";
+                reply += "Connection: Keep-Alive\r\n";
         }
 
         reply += "\r\n";

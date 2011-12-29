@@ -78,10 +78,12 @@ static int gVOTING = 0;
 void run_client(MySocket *sock, int serverPort)
 {
         HTTPRequest *request = new HTTPRequest(sock, serverPort);
-        if(request->readRequest()) {
+        while(request->readRequest()) {
                 cache()->getHTTPResponse(request->getHost(), request->getRequest(),
                                          request->getUrl(), serverPort, sock,
                                          request->isConnect());
+                delete request;
+                request = new HTTPRequest(sock, serverPort);
         }
 
         sock->close();

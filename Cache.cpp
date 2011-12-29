@@ -43,6 +43,7 @@
 */
 
 #include "Cache.h"
+#include "HTTP.h"
 
 #include <iomanip>
 #include <iostream>
@@ -64,7 +65,7 @@ static string CONNECT_REPLY = "HTTP/1.1 200 Connection Established\r\n\r\n";
 
 Cache *cache()
 {
-    return &globalCache;
+        return &globalCache;
 }
 
 Cache::Cache()
@@ -74,105 +75,122 @@ Cache::Cache()
 
 void Cache::handleResponse(MySocket *browserSock, MySocket *replySock, string request)
 {
-    if(!replySock->write_bytes(request)) {
-        // XXX FIXME we should do something other than 404 here
-        browserSock->write_bytes(reply404);
-        return;
-    }
-
-    unsigned char buf[1024];
-    int num_bytes;
-    bool ret;
-    while((num_bytes = replySock->read(buf, sizeof(buf))) > 0) {        
-        ret = browserSock->write_bytes(buf, num_bytes);
-        if(!ret) {
-            break;
+        if(!replySock->write_bytes(request)) {
+                // XXX FIXME we should do something other than 404 here
+                browserSock->write_bytes(reply404);
+                return;
         }
-    }
+
+        unsigned char buf[1024];
+        int num_bytes;
+        bool ret;
+        HTTP *http = new HTTP(HTTP_RESPONSE);
+        while((num_bytes = replySock->read(buf, sizeof(buf))) > 0) {        
+                ret = true;
+                if(http->isHeaderDone()) {
+                        ret = browserSock->write_bytes(buf, num_bytes);
+                } else {
+                        int r = http->addData(buf, num_bytes);
+                        if(http->isHeaderDone()) {
+                                assert(r > 0);
+                                string str = http->getReplyHeader();
+                                ret = browserSock->write_bytes(str.c_str(), str.size());
+                                if((r < num_bytes) && ret) {
+                                        ret = browserSock->write_bytes(buf+r, num_bytes-r);
+                                }
+                        }
+                }
+                
+                if(!ret) {
+                        break;
+                }
+        }
+
+        delete http;
 }
 
 bool Cache::copyNetBytes(MySocket *readSock, MySocket *writeSock)
 {
-    unsigned char buf[1024];
-    int ret;
+        unsigned char buf[1024];
+        int ret;
 
-    ret = readSock->read(buf, sizeof(buf));
-    if(ret <= 0)
-        return false;
+        ret = readSock->read(buf, sizeof(buf));
+        if(ret <= 0)
+                return false;
 
-    return writeSock->write_bytes(buf, ret);
+        return writeSock->write_bytes(buf, ret);
 }
 
 void Cache::handleTunnel(MySocket *browserSock, MySocket *replySock)
 {
-    if(!browserSock->write_bytes(CONNECT_REPLY))
-        return;
+        if(!browserSock->write_bytes(CONNECT_REPLY))
+                return;
 
-    int bFd = browserSock->getFd();
-    int rFd = replySock->getFd();    
+        int bFd = browserSock->getFd();
+        int rFd = replySock->getFd();    
 
-    int ret;
-    fd_set readSet;
+        int ret;
+        fd_set readSet;
 
-    int maxFd = (bFd > rFd) ? bFd : rFd;
-    while(true) {
-        FD_ZERO(&readSet);
+        int maxFd = (bFd > rFd) ? bFd : rFd;
+        while(true) {
+                FD_ZERO(&readSet);
 
-        FD_SET(rFd, &readSet);
-        FD_SET(bFd, &readSet);
+                FD_SET(rFd, &readSet);
+                FD_SET(bFd, &readSet);
 
-        ret = select(maxFd+1, &readSet, NULL, NULL, NULL);
+                ret = select(maxFd+1, &readSet, NULL, NULL, NULL);
 
-        if(ret <= 0)
-            break;
+                if(ret <= 0)
+                        break;
 
-        if(FD_ISSET(rFd, &readSet)) {
-            if(!copyNetBytes(replySock, browserSock)) {
-                break;
-            }
+                if(FD_ISSET(rFd, &readSet)) {
+                        if(!copyNetBytes(replySock, browserSock)) {
+                                break;
+                        }
+                }
+
+                if(FD_ISSET(bFd, &readSet)) {
+                        if(!copyNetBytes(browserSock, replySock)) {
+                                break;
+                        }
+                }
         }
-
-        if(FD_ISSET(bFd, &readSet)) {
-            if(!copyNetBytes(browserSock, replySock)) {
-                break;
-            }
-        }
-    }
 }
 
 void Cache::getHTTPResponse(string host, string request, string /*url*/, int /*serverPort*/, 
                             MySocket *browserSock, bool isTunnel)
 {
-    assert(host.find(':') != string::npos);
-    assert(host.find(':') < (host.length()-1));
-    string portStr = host.substr(host.find(':')+1);
-    string hostStr = host.substr(0, host.find(':'));
-    int port;
-    int ret = sscanf(portStr.c_str(), "%d", &port);
-    assert((ret == 1) && (port > 0));
-    MySocket *replySock = NULL;
-    try {
-        //cout << "making connection to " << hostStr << ":" << port << endl;
-        replySock = new MySocket(hostStr.c_str(), port);
-    } catch(char *e) {
-        cout << e << endl;
-    } catch(...) {
-        cout << "could not connect to " << hostStr << ":" << port << endl;
-    }
+        assert(host.find(':') != string::npos);
+        assert(host.find(':') < (host.length()-1));
+        string portStr = host.substr(host.find(':')+1);
+        string hostStr = host.substr(0, host.find(':'));
+        int port;
+        int ret = sscanf(portStr.c_str(), "%d", &port);
+        assert((ret == 1) && (port > 0));
+        MySocket *replySock = NULL;
+        try {
+                //cout << "making connection to " << hostStr << ":" << port << endl;
+                replySock = new MySocket(hostStr.c_str(), port);
+        } catch(char *e) {
+                cout << e << endl;
+        } catch(...) {
+                cout << "could not connect to " << hostStr << ":" << port << endl;
+        }
 
-    if(replySock == NULL) {
-        cout << "returning 404" << endl;
-        browserSock->write_bytes(reply404);
-        return;
-    }
+        if(replySock == NULL) {
+                cout << "returning 404" << endl;
+                browserSock->write_bytes(reply404);
+                return;
+        }
 
-    if(isTunnel) {
-        handleTunnel(browserSock, replySock);
-    } else {
-        handleResponse(browserSock, replySock, request);
-    }
+        if(isTunnel) {
+                handleTunnel(browserSock, replySock);
+        } else {
+                handleResponse(browserSock, replySock, request);
+        }
 
-    delete replySock;
+        delete replySock;
 }
 
 
