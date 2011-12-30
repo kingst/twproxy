@@ -132,9 +132,13 @@ bool Cache::copyNetBytes(MySocket *readSock, MySocket *writeSock)
 
 void Cache::handleTunnel(MySocket *browserSock, MySocket *replySock)
 {
+        //FIXME: this return is actually an error, should handle it
         if(!browserSock->write_bytes(CONNECT_REPLY))
                 return;
 
+        replySock->enableSSLClient();
+        browserSock->enableSSLServer(replySock);
+        
         int bFd = browserSock->getFd();
         int rFd = replySock->getFd();    
 
