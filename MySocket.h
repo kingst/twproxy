@@ -33,7 +33,8 @@ class MySocket {
   /*
    * default constructor, makes sure the state is properly specified
    */
-  MySocket(void);
+      //hx: I don't think we should give default ctor anymore
+//    MySocket(void);
   ~MySocket(void);
 
   /*
@@ -65,7 +66,8 @@ class MySocket {
 
   bool write_bytes(std::string buffer);
   bool write_bytes(const void *buffer, int len);
-  void enableSSLServer(void);
+//  void enableSSLServer(void);
+  void enableSSLServer(MySocket *);
   void enableSSLClient(void);
 
   /*
@@ -77,6 +79,16 @@ class MySocket {
   bool isClosed() {return sockFd < 0;}
 
  protected:
+      //this is the function which generate a fake certificate, based on
+      //the proxy <--> remotesite connection.
+  X509 *generateFakeCert(MySocket *clentSock);
+      //these are helper functions to make fake certificate
+  EVP_PKEY *readPublicKey(const char *certfile);
+  EVP_PKEY *readPrivateKey(const char *keyfile);
+  X509 *readX509(const char *certfile);
+  X509 *makeAndInitCert();
+  void initNewName(X509_NAME *new_name, X509_NAME *server_cert_subj_name);
+
   int sockFd;
   void brokenPipe(int sigNo);
   bool isSSL;
