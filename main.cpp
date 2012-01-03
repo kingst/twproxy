@@ -11,7 +11,7 @@
 **    Science The University of Illinois at Urbana-Champaign 
 **    http://www.cs.uiuc.edu/homes/kingst/Research.html 
 **
-** Copyright (C) Sam King and Hui Xue
+** Copyright (C) Sam King, Hui Xue
 **
 ** Permission is hereby granted, free of charge, to any person obtaining a 
 ** copy of this software and associated documentation files (the 
@@ -243,60 +243,54 @@ static void get_opts(int argc, char *argv[])
 //from mttest.c in openssl/crypto/threads/mttest.c
 static void pthreads_locking_callback(int mode, int type, char *file, int line)
 {
-#ifdef undef
-    fprintf(stderr,"thread=%4d mode=%s lock=%s %s:%d\n",
-            CRYPTO_thread_id(),
-            (mode&CRYPTO_LOCK)?"l":"u",
-            (type&CRYPTO_READ)?"r":"w",file,line);
-#endif
-    if (mode & CRYPTO_LOCK) {
-        pthread_mutex_lock(&(lock_cs[type]));
-        lock_count[type]++;
-    } else {
-        pthread_mutex_unlock(&(lock_cs[type]));
-    }
+        if (mode & CRYPTO_LOCK) {
+                pthread_mutex_lock(&(lock_cs[type]));
+                lock_count[type]++;
+        } else {
+                pthread_mutex_unlock(&(lock_cs[type]));
+        }
 }
 //from mttest.c in openssl/crypto/threads/mttest.c
 static unsigned long pthreads_thread_id(void)
 {
-    unsigned long ret;
+        unsigned long ret;
 
-    ret=(unsigned long)pthread_self();
-    return(ret);
+        ret=(unsigned long)pthread_self();
+        return(ret);
 }
 
 //from mttest.c in openssl/crypto/threads/mttest.c
 static void openssl_thread_setup()
 {
-    int i;
+        int i;
     
-    lock_cs = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() * sizeof(pthread_mutex_t));
-    lock_count = (long *)OPENSSL_malloc(CRYPTO_num_locks() * sizeof(long));
-    for (i = 0; i < CRYPTO_num_locks(); i++)
-    {
-        lock_count[i] = 0;
-        pthread_mutex_init(&(lock_cs[i]),NULL);
-    }
+        lock_cs = (pthread_mutex_t *)OPENSSL_malloc(CRYPTO_num_locks() * sizeof(pthread_mutex_t));
+        lock_count = (long *)OPENSSL_malloc(CRYPTO_num_locks() * sizeof(long));
+        for (i = 0; i < CRYPTO_num_locks(); i++)
+        {
+                lock_count[i] = 0;
+                pthread_mutex_init(&(lock_cs[i]),NULL);
+        }
     
-    CRYPTO_set_id_callback((unsigned long (*)())pthreads_thread_id);
-    CRYPTO_set_locking_callback((void (*)(int, int, const char *, int))pthreads_locking_callback);
+        CRYPTO_set_id_callback((unsigned long (*)())pthreads_thread_id);
+        CRYPTO_set_locking_callback((void (*)(int, int, const char *, int))pthreads_locking_callback);
 }
 //from mttest.c in openssl/crypto/threads/mttest.c
 static void openssl_thread_cleanup()
 {
-    int i;
+        int i;
 
-    CRYPTO_set_locking_callback(NULL);
-    fprintf(stderr,"cleanup\n");
-    for (i = 0; i < CRYPTO_num_locks(); i++)
-    {
-        pthread_mutex_destroy(&(lock_cs[i]));
-        fprintf(stderr,"%8ld:%s\n",lock_count[i], CRYPTO_get_lock_name(i));
-    }
-    OPENSSL_free(lock_cs);
-    OPENSSL_free(lock_count);
+        CRYPTO_set_locking_callback(NULL);
+        fprintf(stderr,"cleanup\n");
+        for (i = 0; i < CRYPTO_num_locks(); i++)
+        {
+                pthread_mutex_destroy(&(lock_cs[i]));
+                fprintf(stderr,"%8ld:%s\n",lock_count[i], CRYPTO_get_lock_name(i));
+        }
+        OPENSSL_free(lock_cs);
+        OPENSSL_free(lock_count);
 
-    fprintf(stderr,"done cleanup\n");
+        fprintf(stderr,"done cleanup\n");
 
 }
 
